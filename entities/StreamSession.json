@@ -1,0 +1,23 @@
+{
+  "name": "StreamSession",
+  "type": "object",
+  "properties": {
+    "device_name": {
+      "type": "string",
+      "description": "Display name of the broadcasting device"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["waiting", "connected", "disconnected"]
+    },
+    "offer_sdp": {
+      "type": "string",
+      "description": "JSON-stringified RTCSessionDescription from the camera"
+    },
+    "answer_sdp": {
+      "type": "string",
+      "description": "JSON-stringified RTCSessionDescription from the viewer"
+    }
+  },
+  "required": ["device_name", "status"]
+}

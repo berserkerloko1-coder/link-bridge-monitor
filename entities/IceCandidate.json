@@ -1,0 +1,19 @@
+{
+  "name": "IceCandidate",
+  "type": "object",
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "description": "StreamSession id this ICE candidate belongs to"
+    },
+    "sender": {
+      "type": "string",
+      "enum": ["broadcaster", "viewer"]
+    },
+    "candidate": {
+      "type": "string",
+      "description": "JSON-stringified RTCIceCandidate"
+    }
+  },
+  "required": ["session_id", "sender", "candidate"]
+}
