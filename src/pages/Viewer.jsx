@@ -16,19 +16,30 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { normalizePairingCode, peerIdForCode } from "@/lib/pairing";
 import { createPeer, destroyPeer, waitForOpen } from "@/lib/peerClient";
+import { getLastCamera, setLastCamera } from "@/lib/storage";
 
 export default function Viewer() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [code, setCode] = useState(normalizePairingCode(searchParams.get("code") || ""));
+  const quickMode = searchParams.get("quick") === "1";
+  const [code, setCode] = useState(
+    normalizePairingCode(searchParams.get("code") || getLastCamera() || "")
+  );
   const [selectedName, setSelectedName] = useState("");
   const [status, setStatus] = useState("idle");
   const [error, setError] = useState("");
   const videoRef = useRef(null);
   const peerRef = useRef(null);
   const callRef = useRef(null);
+  const autoConnectAttemptedRef = useRef(false);
+  const retryTimerRef = useRef(null);
+  const connectingRef = useRef(false);
 
   const disconnectPeer = () => {
+    if (retryTimerRef.current) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
     if (callRef.current) {
       try {
         callRef.current.close();
@@ -40,33 +51,53 @@ export default function Viewer() {
     if (videoRef.current) videoRef.current.srcObject = null;
   };
 
+  const scheduleRetry = (nextCode) => {
+    if (retryTimerRef.current) return;
+    setStatus("connecting");
+    retryTimerRef.current = setTimeout(() => {
+      retryTimerRef.current = null;
+      connectingRef.current = false;
+      connectTo(nextCode, { silent: true });
+    }, 2000);
+  };
+
   useEffect(() => {
     return () => disconnectPeer();
   }, []);
 
-  const connectTo = async () => {
-    const nextCode = normalizePairingCode(code);
+  const connectTo = async (rawCode, { silent } = {}) => {
+    const nextCode = normalizePairingCode(rawCode ?? code);
     if (nextCode.length < 4) {
-      toast.error("Enter the camera code");
+      if (!silent) toast.error("Enter the camera code");
       return;
     }
+    if (connectingRef.current) return;
+    connectingRef.current = true;
+    setCode(nextCode);
     setStatus("connecting");
     setError("");
     setSelectedName(nextCode);
+    setLastCamera(nextCode);
     disconnectPeer();
 
     try {
       const peer = createPeer();
       peerRef.current = peer;
+      await waitForOpen(peer);
+
       peer.on("error", (err) => {
         const msg =
           err?.type === "peer-unavailable"
             ? "No camera is using that code. Start Camera Mode first."
             : err?.message || "Could not connect to this camera";
+        if (quickMode) {
+          scheduleRetry(nextCode);
+          return;
+        }
         setError(msg);
         setStatus("error");
+        connectingRef.current = false;
       });
-      await waitForOpen(peer);
 
       peer.on("call", (call) => {
         call.answer();
@@ -77,28 +108,56 @@ export default function Viewer() {
             videoRef.current.play().catch(() => {});
           }
           setStatus("connected");
+          connectingRef.current = false;
         });
         call.on("close", () => {
+          if (quickMode) {
+            scheduleRetry(nextCode);
+            return;
+          }
           setStatus((prev) => (prev === "connected" ? "disconnected" : prev));
         });
         call.on("error", (err) => {
           setError(err?.message || "Could not connect to this camera");
           setStatus("error");
+          connectingRef.current = false;
         });
       });
 
       const conn = peer.connect(peerIdForCode(nextCode), { reliable: true });
       conn.on("error", (err) => {
+        if (quickMode) {
+          scheduleRetry(nextCode);
+          return;
+        }
         setError(err?.message || "Could not connect to this camera");
         setStatus("error");
+        connectingRef.current = false;
       });
     } catch (err) {
+      if (quickMode) {
+        scheduleRetry(nextCode);
+        return;
+      }
       setError(err?.message || "Could not connect to this camera");
       setStatus("error");
+      connectingRef.current = false;
     }
   };
 
+  useEffect(() => {
+    if (autoConnectAttemptedRef.current) return;
+    const fromUrl = normalizePairingCode(searchParams.get("code") || "");
+    const last = getLastCamera();
+    const target = fromUrl || (quickMode ? last : "");
+    if (!target) return;
+    autoConnectAttemptedRef.current = true;
+    connectTo(target, { silent: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const disconnect = () => {
+    connectingRef.current = false;
     disconnectPeer();
     setSelectedName("");
     setStatus("idle");
@@ -200,7 +259,7 @@ export default function Viewer() {
                   />
                 </div>
                 <Button
-                  onClick={connectTo}
+                  onClick={() => connectTo()}
                   className="w-full bg-white text-slate-900 hover:bg-white/90 text-base py-6"
                 >
                   <Eye className="w-5 h-5 mr-2" />

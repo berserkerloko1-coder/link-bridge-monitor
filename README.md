@@ -14,11 +14,14 @@ Bookmark that link. Add it to the home screen if you want.
 
 1. Plug in the home phone. Open the link above.
 2. Tap **Use as Camera**, name it, start broadcasting.
-3. Keep that tab open. Do not lock the phone if you can avoid it.
-4. When you are out, open the same link on your phone (Wi-Fi or cellular).
-5. Tap **View a Camera** and enter the 6-character code (or use the copied viewer link).
+3. Optional: tap **Hide screen** so the home phone looks asleep or like a normal home screen. Triple-tap to come back.
+4. Keep that tab open. Do not lock the phone if you can avoid it.
+5. When you are out, open the same link on your phone (Wi-Fi or cellular).
+6. Tap **View a Camera** and enter the 6-character code (or use the copied viewer link). After the first time, **View last camera** connects in one tap.
 
 The home phone is the camera. This website only introduces the two phones. Video goes over the internet so you can watch from outside the house.
+
+Hide screen is for your own home camera so a visitor does not immediately see a live preview. It is not for recording other people in secret.
 
 ## Local code
 
