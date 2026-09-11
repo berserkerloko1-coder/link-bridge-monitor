@@ -20,8 +20,8 @@ export default function Home() {
             Turn a phone into a live security camera.
           </h1>
           <p className="mt-4 text-lg text-slate-500 max-w-2xl leading-relaxed">
-            Leave one phone at home as the camera. Watch and listen from your other phone when you
-            are out — even on cellular. No Base44 account or paid plan.
+            Leave one phone at home as the camera. Watch from the phone you carry — split screen,
+            listen with EQ, record video or audio on this phone. No Base44 account or paid plan.
           </p>
         </div>
       </header>
@@ -91,8 +91,8 @@ export default function Home() {
                 </CardHeader>
                 <CardContent>
                   <p className="text-sm text-slate-400 leading-relaxed">
-                    Open this on the phone you take with you. Enter the camera code from anywhere —
-                    home Wi-Fi or out on data.
+                    Open this on the phone you take with you. Enter a code, add more cameras for
+                    split screen, record on this phone, and hold Talk to speak through the house.
                   </p>
                   <div className="mt-6 inline-flex items-center gap-2 text-sm font-medium text-slate-900 group-hover:gap-3 transition-all">
                     <Eye className="w-4 h-4" />

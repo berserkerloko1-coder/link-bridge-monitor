@@ -44,9 +44,10 @@ export default function Broadcaster() {
   const [recordingName, setRecordingName] = useState("");
 
   const videoRef = useRef(null);
+  const talkAudioRef = useRef(null);
   const peerRef = useRef(null);
   const streamRef = useRef(null);
-  const callRef = useRef(null);
+  const callsRef = useRef([]);
   const tapCountRef = useRef(0);
   const tapTimerRef = useRef(null);
   const autoStartAttemptedRef = useRef(false);
@@ -65,12 +66,12 @@ export default function Broadcaster() {
 
   const cleanup = () => {
     stopRecorder();
-    if (callRef.current) {
+    callsRef.current.forEach((call) => {
       try {
-        callRef.current.close();
+        call.close();
       } catch {}
-      callRef.current = null;
-    }
+    });
+    callsRef.current = [];
     destroyPeer(peerRef.current);
     peerRef.current = null;
     if (streamRef.current) {
@@ -167,13 +168,49 @@ export default function Broadcaster() {
         setStatus((prev) => (prev === "connected" ? "waiting" : prev));
       });
 
+      const setTorch = async (on) => {
+        const track = media.getVideoTracks()[0];
+        if (!track?.getCapabilities) return false;
+        const caps = track.getCapabilities();
+        if (!caps.torch) return false;
+        try {
+          await track.applyConstraints({ advanced: [{ torch: !!on }] });
+          return true;
+        } catch {
+          return false;
+        }
+      };
+
+      peer.on("call", (incoming) => {
+        incoming.answer();
+        incoming.on("stream", (remote) => {
+          if (!talkAudioRef.current) return;
+          talkAudioRef.current.srcObject = remote;
+          talkAudioRef.current.play().catch(() => {});
+        });
+        incoming.on("close", () => {
+          if (talkAudioRef.current) talkAudioRef.current.srcObject = null;
+        });
+      });
+
       peer.on("connection", (conn) => {
+        conn.on("data", async (msg) => {
+          if (msg?.type === "torch") {
+            const ok = await setTorch(msg.on);
+            try {
+              conn.send({ type: "torch", on: msg.on, ok });
+            } catch {}
+          }
+        });
         conn.on("open", () => {
           const call = peer.call(conn.peer, media);
-          callRef.current = call;
+          callsRef.current.push(call);
           setStatus("connected");
           call.on("close", () => {
-            setStatus((prev) => (prev === "connected" ? "waiting" : prev));
+            callsRef.current = callsRef.current.filter((item) => item !== call);
+            if (callsRef.current.length === 0) {
+              setStatus((prev) => (prev === "connected" ? "waiting" : prev));
+            }
           });
         });
       });
@@ -551,6 +588,7 @@ export default function Broadcaster() {
         ) : (
           <StealthDimScreen onTap={handleStealthTap} />
         ))}
+      <audio ref={talkAudioRef} autoPlay className="hidden" />
     </div>
   );
 }
