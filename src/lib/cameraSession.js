@@ -2,6 +2,7 @@ import { normalizePairingCode, peerIdForCode } from "@/lib/pairing";
 import { createPeer, destroyPeer, waitForOpen } from "@/lib/peerClient";
 
 const RETRY_MS = 2000;
+const RETRY_MAX_MS = 15000;
 
 export function createCameraSession({
   code,
@@ -49,14 +50,17 @@ export function createCameraSession({
     peer = null;
   };
 
+  let retryDelay = RETRY_MS;
   const scheduleRetry = (myGen) => {
     if (stopped || myGen !== generation) return;
     clearRetry();
+    const delay = retryDelay;
+    retryDelay = Math.min(retryDelay * 2, RETRY_MAX_MS);
     retryTimer = setTimeout(() => {
       retryTimer = null;
       if (stopped || myGen !== generation) return;
       connect();
-    }, RETRY_MS);
+    }, delay);
   };
 
   const connect = async () => {
@@ -65,6 +69,7 @@ export function createCameraSession({
     clearRetry();
     hangupMedia();
     onStatus?.("connecting");
+    retryDelay = RETRY_MS;
 
     try {
       const nextPeer = createPeer();
