@@ -4,6 +4,10 @@ import { ICE_SERVERS } from "@/lib/webrtc";
 export function createPeer(id) {
   return new Peer(id, {
     debug: 1,
+    secure: true,
+    host: "0.peerjs.com",
+    port: 443,
+    path: "/",
     config: ICE_SERVERS,
   });
 }
