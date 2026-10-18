@@ -1,8 +1,9 @@
 import { normalizePairingCode, peerIdForCode } from "@/lib/pairing";
 import { createPeer, destroyPeer, waitForOpen } from "@/lib/peerClient";
 
-const RETRY_MS = 2000;
-const RETRY_MAX_MS = 15000;
+const RETRY_MS = 1500;
+const RETRY_MAX_MS = 10000;
+const STREAM_TIMEOUT_MS = 4000;
 
 export function createCameraSession({
   code,
@@ -18,9 +19,11 @@ export function createCameraSession({
   let call = null;
   let conn = null;
   let retryTimer = null;
+  let streamTimer = null;
   let talkCall = null;
   let talkStream = null;
   let stopped = true;
+  let gotStream = false;
 
   const clearRetry = () => {
     if (retryTimer) {
@@ -29,7 +32,15 @@ export function createCameraSession({
     }
   };
 
+  const clearStreamTimer = () => {
+    if (streamTimer) {
+      clearTimeout(streamTimer);
+      streamTimer = null;
+    }
+  };
+
   const hangupMedia = () => {
+    clearStreamTimer();
     try {
       talkCall?.close();
     } catch {}
@@ -48,6 +59,7 @@ export function createCameraSession({
     conn = null;
     destroyPeer(peer);
     peer = null;
+    gotStream = false;
   };
 
   let retryDelay = RETRY_MS;
@@ -63,6 +75,12 @@ export function createCameraSession({
     }, delay);
   };
 
+  const requestStream = () => {
+    try {
+      if (conn?.open) conn.send({ type: "request-stream" });
+    } catch {}
+  };
+
   const connect = async () => {
     const myGen = ++generation;
     stopped = false;
@@ -70,6 +88,7 @@ export function createCameraSession({
     hangupMedia();
     onStatus?.("connecting");
     retryDelay = RETRY_MS;
+    gotStream = false;
 
     try {
       const nextPeer = createPeer();
@@ -103,6 +122,8 @@ export function createCameraSession({
         call = incoming;
         incoming.on("stream", (remote) => {
           if (myGen !== generation || stopped) return;
+          gotStream = true;
+          clearStreamTimer();
           onStream?.(remote);
           onStatus?.("connected");
         });
@@ -126,6 +147,18 @@ export function createCameraSession({
         try {
           conn.send({ type: "hello", role: "viewer" });
         } catch {}
+        // Ask for the stream. If it doesn't arrive, ask again.
+        requestStream();
+        clearStreamTimer();
+        streamTimer = setTimeout(() => {
+          if (myGen !== generation || stopped || gotStream) return;
+          requestStream();
+          streamTimer = setTimeout(() => {
+            if (myGen !== generation || stopped || gotStream) return;
+            onError?.("Camera is online but video did not start. Retrying.");
+            scheduleRetry(myGen);
+          }, STREAM_TIMEOUT_MS);
+        }, STREAM_TIMEOUT_MS);
       });
       conn.on("data", (msg) => {
         if (myGen !== generation || stopped) return;
@@ -134,6 +167,11 @@ export function createCameraSession({
       conn.on("error", (err) => {
         if (myGen !== generation || stopped) return;
         onError?.(err?.message || "Could not connect to this camera");
+        onStatus?.("connecting");
+        scheduleRetry(myGen);
+      });
+      conn.on("close", () => {
+        if (myGen !== generation || stopped) return;
         onStatus?.("connecting");
         scheduleRetry(myGen);
       });
